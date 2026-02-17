@@ -55,10 +55,6 @@
 5.  **Open the app**:
     Navigate to [http://localhost:3000](http://localhost:3000).
 
-## 🔒 Security Note
-
-This project is designed to run locally or in a private deployment. API keys are handled server-side (`process.env`) and are **never** leaked to the client. The debate engine intentionally strips system prompts from client-side events to protect proprietary prompt engineering.
-
 ## License
 
-[MIT](LICENSE)
+All Rights Reserved. Closed Source.
