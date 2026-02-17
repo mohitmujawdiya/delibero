@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Delibero
 
-## Getting Started
+**Delibero** is an AI-powered strategic debate platform where multiple expert personas deliberate your toughest business questions. It uses adversarial reasoning to challenge assumptions, stress-test ideas, and synthesize a more robust path forward.
 
-First, run the development server:
+![Delibero UI](https://github.com/mohitmujawdiya/delibero/raw/main/public/delibero-preview.png)
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🚀 Features
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+- **Strategic Reframing**: Before the debate begins, a specialized agent analyzes your question to identify hidden asymmetries and reframe the problem statement.
+- **Multi-Persona Debate**: Four distinct AI agents (CEO, CFO, CTO, Product) debate the reframed question, each with their own incentives and cognitive biases.
+- **Adversarial Reasoning**: Agents don't just agree; they are prompted to challenge each other, expose risks, and fight for resources.
+- **Constraint Critic**: A "reality check" phase that evaluates the emerging consensus against your specific real-world constraints (budget, timeline, team size).
+- **Strategic Synthesis**: The final output isn't just a summary—it provides a clear **Strategic Thesis**, a decision matrix, and **Lessons from the Losing Side**.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🧠 The Personas
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1.  **Elena Vasquez (Chief Strategy Officer)**: Visionary, focuses on long-term moats and market positioning.
+2.  **Morgan Blackwell (CFO)**: Conservative, focuses on capital preservation, unit economics, and option value.
+3.  **Dr. Marcus Chen (Devil's Advocate)**: Contrarian, specifically targets cognitive biases (sunk cost, action bias) and organizational incentives.
+4.  **Sarah Jenkins (VP Strategy)**: Pragmatic, focuses on execution feasibility and customer impact.
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Framework**: Next.js 15 (App Router)
+- **Styling**: Vanilla CSS (CSS Variables, Flexbox/Grid) — no Tailwind
+- **AI**: OpenAI (GPT-4o) or Anthropic (Claude 3.5 Sonnet)
+- **Streaming**: Server-Sent Events (SSE) for real-time debate playback
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📦 Getting Started
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1.  **Clone the repository**:
+    ```bash
+    git clone https://github.com/mohitmujawdiya/delibero.git
+    cd delibero
+    ```
 
-## Deploy on Vercel
+2.  **Install dependencies**:
+    ```bash
+    npm install
+    ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+3.  **Configure API Keys**:
+    Create a `.env.local` file in the root directory:
+    ```bash
+    OPENAI_API_KEY=sk-...
+    # OR
+    ANTHROPIC_API_KEY=sk-ant-...
+    ```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+4.  **Run the development server**:
+    ```bash
+    npm run dev
+    ```
+
+5.  **Open the app**:
+    Navigate to [http://localhost:3000](http://localhost:3000).
+
+## 🔒 Security Note
+
+This project is designed to run locally or in a private deployment. API keys are handled server-side (`process.env`) and are **never** leaked to the client. The debate engine intentionally strips system prompts from client-side events to protect proprietary prompt engineering.
+
+## License
+
+[MIT](LICENSE)
