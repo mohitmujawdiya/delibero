@@ -26,35 +26,6 @@
 - **AI**: OpenAI (GPT-4o) or Anthropic (Claude 3.5 Sonnet)
 - **Streaming**: Server-Sent Events (SSE) for real-time debate playback
 
-## 📦 Getting Started
 
-1.  **Clone the repository**:
-    ```bash
-    git clone https://github.com/mohitmujawdiya/delibero.git
-    cd delibero
-    ```
-
-2.  **Install dependencies**:
-    ```bash
-    npm install
-    ```
-
-3.  **Configure API Keys**:
-    Create a `.env.local` file in the root directory:
-    ```bash
-    OPENAI_API_KEY=sk-...
-    # OR
-    ANTHROPIC_API_KEY=sk-ant-...
-    ```
-
-4.  **Run the development server**:
-    ```bash
-    npm run dev
-    ```
-
-5.  **Open the app**:
-    Navigate to [http://localhost:3000](http://localhost:3000).
-
-## License
 
 All Rights Reserved. Closed Source.
