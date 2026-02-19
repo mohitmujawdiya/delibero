@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 import { callLLM, streamLLM, ModelConfig } from "@/lib/llm";
 
-export const maxDuration = 60; // Allow 60s for a single LLM call (though usually faster)
+
+// Switch to Edge Runtime for better streaming support and no 10s/60s timeout
+export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
     const accessCode = process.env.DELIBERO_ACCESS_CODE;
