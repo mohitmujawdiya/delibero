@@ -28,4 +28,24 @@
 
 
 
+## 🏗️ Technical Architecture
+
+### 1. Hybrid Orchestration (Client-Driven)
+Delibero uses a unique **"Thick Client, Smart Edge"** architecture to handle complex, long-running debates without timeouts.
+- **Orchestrator**: The debate loop (`engine.ts`) runs partially on the client to manage state and partially on the Edge to generate tokens.
+- **Streaming**: All agent responses are streamed in real-time using `ReadableStream`, ensuring the application remains responsive even during 60+ second generations.
+- **Persistence**: Debate history is stored entirely in the user's browser (`localStorage`), prioritizing privacy and removing the need for a database.
+
+### 2. The Reasoning Topology
+The core engine follows a strict, multi-stage topology for every round:
+1.  **Generation**: Agents generate arguments in parallel based on their persona constraints.
+2.  **Evidence Audit**: A separate model extracts claims and checks for hallucinations or contradictions.
+3.  **Cross-Examination**: If contradictions are found, a "Cross-Exam" phase is triggered where agents interrogate each other.
+4.  **Constraint Critic**: An iterative loop checks the emerging consensus against hard constraints (Budget, Legal, Timeline) *before* the next round starts.
+5.  **Synthesis**: A final step compresses the round's context and decides if the debate needs to diverge (extend) or converge (end).
+
+### 3. Edge-First API
+- **Runtime**: `/api/chat` runs on **Vercel Edge Runtime** to bypass the standard 10s serverless timeout, allowing for deep-thinking models to run to completion.
+- **Security**: Stateless API design protected by a `DELIBERO_ACCESS_CODE` to prevent unauthorized usage.
+
 All Rights Reserved. Closed Source.
