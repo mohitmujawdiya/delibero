@@ -44,7 +44,7 @@ export type DebateEvent =
     | { type: "divergence"; round: number; score: number; assessment: string }
     | { type: "disruption"; round: number; content: string }
     | { type: "round_summary"; round: number; content: string }
-    | { type: "constraint_check"; content: string }
+    | { type: "constraint_check"; round?: number; content: string }
     | { type: "synthesis"; content: string }
     | { type: "counterfactual_report"; report: CounterfactualReport }
     | { type: "debate_end" }

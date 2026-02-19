@@ -15,8 +15,14 @@ interface MarkdownContentProps {
 export function MarkdownContent({ text, className }: MarkdownContentProps) {
     return (
         <div className={`markdown-content ${className || ""}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {text}
+            <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                    // Override paragraph to avoid huge margins on single lines
+                    p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>
+                }}
+            >
+                {text.trim()}
             </ReactMarkdown>
         </div>
     );

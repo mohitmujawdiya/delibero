@@ -9,6 +9,7 @@ interface RoundCardProps {
     agentResponses: { persona: ClientPersona; content: string }[];
     summary: string | null;
     evidenceReport: EvidenceReport | null;
+    constraintCheck?: string | null; // Optional prop
     isInProgress: boolean;
     onViewDetails: () => void;
 }
@@ -18,9 +19,13 @@ export function RoundCard({
     agentResponses,
     summary,
     evidenceReport,
+    constraintCheck,
     isInProgress,
     onViewDetails,
 }: RoundCardProps) {
+    // Only show constraint check if it's not empty/null
+    const hasCritique = constraintCheck && constraintCheck.trim().length > 0;
+
     return (
         <div
             className={`round-card ${isInProgress ? "round-card--active" : ""}`}
@@ -72,6 +77,22 @@ export function RoundCard({
             {summary && (
                 <div className="round-card-summary">
                     <MarkdownContent text={summary} />
+                </div>
+            )}
+
+            {/* Constraint Critic Warning */}
+            {hasCritique && (
+                <div className="round-card-critique" style={{
+                    marginTop: '0.75rem',
+                    padding: '0.75rem',
+                    background: '#FFF3CD',
+                    border: '1px solid #FFEEBA',
+                    borderRadius: '6px',
+                    fontSize: '0.85rem',
+                    color: '#856404'
+                }}>
+                    <strong style={{ display: 'block', marginBottom: '0.25rem' }}>🛡️ Constraint Check:</strong>
+                    <MarkdownContent text={constraintCheck} />
                 </div>
             )}
 

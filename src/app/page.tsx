@@ -68,6 +68,7 @@ interface RoundData {
   crossExams: CrossExamResult[];
   disruptions: string[];
   divergence: DivergenceResult | null;
+  constraintCheck: string | null; // New field for per-round critique
 }
 
 type AppState = "setup" | "debating" | "complete" | "error";
@@ -179,6 +180,7 @@ export default function Home() {
             crossExams: [],
             disruptions: [],
             divergence: null,
+            constraintCheck: null, // Init new field
           },
         ]);
         break;
@@ -275,7 +277,7 @@ export default function Home() {
 
       case "round_summary":
         setLoadingMessage(
-          `Round ${event.round} complete — compressing context...`
+          `Round ${event.round} complete — checking constraints...`
         );
         setCurrentRoundInProgress(null);
         setRoundsData((prev) => {
@@ -291,10 +293,26 @@ export default function Home() {
         break;
 
       case "constraint_check":
-        setLoadingMessage(
-          "Constraint critic finished — generating final decision..."
-        );
-        setConstraintCheckContent(event.content!);
+        // Handle Iterative Critique
+        if (event.round) {
+          setRoundsData((prev) => {
+            const updated = [...prev];
+            const currentRound = updated.find((r) => r.round === event.round);
+            if (currentRound) {
+              currentRound.constraintCheck = event.content!;
+            }
+            return updated;
+          });
+          setLoadingMessage(
+            `Round ${event.round} verified — starting next round...`
+          );
+        } else {
+          // Fallback for global check (legacy or final guard)
+          setConstraintCheckContent(event.content!);
+          setLoadingMessage(
+            "Final review complete — generating decision..."
+          );
+        }
         break;
 
       case "synthesis":
@@ -638,6 +656,7 @@ ${selectedPersonas.map(p => {
                   agentResponses={round.agentResponses}
                   summary={round.summary}
                   evidenceReport={round.evidenceReport}
+                  constraintCheck={round.constraintCheck} // Pass the critique
                   isInProgress={
                     currentRoundInProgress === round.round
                   }
