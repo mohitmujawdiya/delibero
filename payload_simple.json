@@ -1,0 +1,8 @@
+{
+    "question": "Should we change our logo from blue to green for Earth Day?",
+    "personaIds": [
+        "auto"
+    ],
+    "rounds": 2,
+    "modelId": "gpt-4o"
+}

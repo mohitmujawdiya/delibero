@@ -1,0 +1,8 @@
+{
+    "question": "Should Luminate acquire a $50B competitor to monopolize the smart home market, or is this an antitrust trap? The competitor has toxic assets but massive IP.",
+    "personaIds": [
+        "auto"
+    ],
+    "rounds": 2,
+    "modelId": "gpt-4o"
+}

@@ -1,0 +1,11 @@
+{
+    "question": "Should Luminate (enterprise SaaS, $50M ARR) launch a freemium Light version to counter a new VC-backed competitor (PLG motion), or double down on enterprise features/sales?",
+    "rounds": 2,
+    "personaIds": [
+        "strategist",
+        "devils-advocate",
+        "cfo",
+        "operations"
+    ],
+    "modelId": "gpt-4o"
+}

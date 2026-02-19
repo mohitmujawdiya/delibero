@@ -1,12 +1,14 @@
 "use client";
 
 import { ClientPersona } from "@/lib/engine";
+import { EvidenceReport } from "@/lib/evidence";
 import { MarkdownContent } from "@/components/MarkdownContent";
 
 interface RoundCardProps {
     round: number;
     agentResponses: { persona: ClientPersona; content: string }[];
     summary: string | null;
+    evidenceReport: EvidenceReport | null;
     isInProgress: boolean;
     onViewDetails: () => void;
 }
@@ -15,6 +17,7 @@ export function RoundCard({
     round,
     agentResponses,
     summary,
+    evidenceReport,
     isInProgress,
     onViewDetails,
 }: RoundCardProps) {
@@ -69,6 +72,15 @@ export function RoundCard({
             {summary && (
                 <div className="round-card-summary">
                     <MarkdownContent text={summary} />
+                </div>
+            )}
+
+            {/* Evidence indicator */}
+            {evidenceReport && evidenceReport.contradictions.length > 0 && (
+                <div className="round-card-evidence">
+                    <span className={`evidence-indicator ${evidenceReport.contradictions.some(c => c.severity === "critical") ? "evidence-indicator--critical" : "evidence-indicator--moderate"}`}>
+                        ⚡ {evidenceReport.contradictions.length} contradiction{evidenceReport.contradictions.length !== 1 ? "s" : ""} found
+                    </span>
                 </div>
             )}
 

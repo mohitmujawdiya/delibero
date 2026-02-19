@@ -54,6 +54,7 @@ interface DebateSetupProps {
         rounds: number;
         modelId: string;
         constraints?: string;
+        accessCode?: string;
     }) => void;
     availableModels: { model: string; label: string }[];
     isLoading: boolean;
@@ -72,6 +73,7 @@ export function DebateSetup({
         "devils-advocate",
     ]);
     const [rounds, setRounds] = useState(3);
+    const [accessCode, setAccessCode] = useState("");
     const [modelId, setModelId] = useState(availableModels[0]?.model || "");
 
     // Sync modelId when availableModels loads (async fetch)
@@ -81,16 +83,25 @@ export function DebateSetup({
         }
     }, [availableModels, modelId]);
 
+    const [autoSelect, setAutoSelect] = useState(false);
+
     const togglePersona = (id: string) => {
+        if (autoSelect) setAutoSelect(false);
         setSelectedPersonas((prev) =>
             prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
         );
     };
 
+    const toggleAutoSelect = () => {
+        setAutoSelect((prev) => !prev);
+        if (!autoSelect) {
+            setSelectedPersonas([]); // Clear manual selection when auto is on
+        }
+    };
+
     const canStart =
         question.trim().length > 10 &&
-        selectedPersonas.length >= 2 &&
-        selectedPersonas.length <= 5 &&
+        (autoSelect || (selectedPersonas.length >= 2 && selectedPersonas.length <= 5)) &&
         modelId;
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -98,10 +109,11 @@ export function DebateSetup({
         if (!canStart) return;
         onStart({
             question: question.trim(),
-            personaIds: selectedPersonas,
+            personaIds: autoSelect ? ["auto"] : selectedPersonas,
             rounds,
             modelId,
             constraints: constraints.trim() || undefined,
+            accessCode: accessCode.trim() || undefined,
         });
     };
 
@@ -142,10 +154,20 @@ export function DebateSetup({
             </div>
 
             <div className="setup-section">
-                <span className="setup-label">
-                    Select Panelists ({selectedPersonas.length}/5)
-                </span>
-                <div className="persona-grid">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                    <span className="setup-label" style={{ marginBottom: 0 }}>
+                        Select Panelists {autoSelect ? "(Auto-Detect)" : `(${selectedPersonas.length}/5)`}
+                    </span>
+                    <button
+                        type="button"
+                        className={`auto-select-btn ${autoSelect ? "active" : ""}`}
+                        onClick={toggleAutoSelect}
+                    >
+                        {autoSelect ? "✨ AI Auto-Selection Active" : "✨ Use AI Auto-Selection"}
+                    </button>
+                </div>
+
+                <div className={`persona-grid ${autoSelect ? "disabled" : ""}`}>
                     {PERSONAS.map((persona) => (
                         <PersonaCard
                             key={persona.id}

@@ -7,12 +7,19 @@ import {
   Synthesis,
   LoadingIndicator,
   ReframingCard,
+  EvidenceReportCard,
+  CounterfactualReportCard,
 } from "@/components/DebateStream";
 import { RoundCard } from "@/components/RoundCard";
 import { RoundDetailPanel } from "@/components/RoundDetailPanel";
 import { CopyButton } from "@/components/CopyButton";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { ClientPersona } from "@/lib/engine";
+import { EvidenceReport } from "@/lib/evidence";
+import { CrossExamResult, DivergenceResult } from "@/lib/topology";
+import { CounterfactualReport } from "@/lib/counterfactuals";
+import { useDebateHistory, SavedDebate } from "@/hooks/useDebateHistory";
+import { HistorySidebar } from "@/components/HistorySidebar";
 
 interface DebateEventData {
   type: string;
@@ -23,18 +30,32 @@ interface DebateEventData {
   persona?: ClientPersona;
   content?: string;
   message?: string;
+  report?: EvidenceReport | CounterfactualReport; // Unified report property
+  counterfactualReport?: CounterfactualReport; // Legacy/unused
+  result?: CrossExamResult;
+  score?: number;
+  assessment?: string;
 }
 
 interface RoundData {
   round: number;
   agentResponses: { persona: ClientPersona; content: string }[];
   summary: string | null;
+  evidenceReport: EvidenceReport | null;
+  crossExams: CrossExamResult[];
+  disruptions: string[];
+  divergence: DivergenceResult | null;
 }
 
 type AppState = "setup" | "debating" | "complete" | "error";
 
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("setup");
+  // History State
+  const { saveDebate } = useDebateHistory();
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [currentDebateId, setCurrentDebateId] = useState<string | null>(null);
+
   const [availableModels, setAvailableModels] = useState<
     { model: string; label: string }[]
   >([]);
@@ -44,6 +65,7 @@ export default function Home() {
     string | null
   >(null);
   const [synthesis, setSynthesis] = useState<string | null>(null);
+  const [counterfactualReport, setCounterfactualReport] = useState<CounterfactualReport | null>(null);
   const [reframingContent, setReframingContent] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [loadingMessage, setLoadingMessage] = useState("");
@@ -98,6 +120,10 @@ export default function Home() {
             round: event.round!,
             agentResponses: [],
             summary: null,
+            evidenceReport: null,
+            crossExams: [],
+            disruptions: [],
+            divergence: null,
           },
         ]);
         break;
@@ -128,6 +154,60 @@ export default function Home() {
         });
         break;
 
+      case "evidence_report":
+        setRoundsData((prev) => {
+          const updated = [...prev];
+          const currentRound = updated.find(
+            (r) => r.round === event.round
+          );
+          if (currentRound) {
+            currentRound.evidenceReport = event.report as EvidenceReport;
+          }
+          return updated;
+        });
+        setLoadingMessage(
+          `Evidence analyzed — summarizing Round ${event.round}...`
+        );
+        break;
+
+      case "cross_examination":
+        setRoundsData((prev) => {
+          const updated = [...prev];
+          const currentRound = updated.find((r) => r.round === event.round);
+          if (currentRound) {
+            currentRound.crossExams.push(event.result!);
+          }
+          return updated;
+        });
+        setLoadingMessage(`Cross-examination in progress: ${event.result?.challenger} vs ${event.result?.target}...`);
+        break;
+
+      case "disruption":
+        setRoundsData((prev) => {
+          const updated = [...prev];
+          const currentRound = updated.find((r) => r.round === event.round);
+          if (currentRound) {
+            currentRound.disruptions.push(event.content!);
+          }
+          return updated;
+        });
+        setLoadingMessage(`⚠️ Disruption injected! Re-evaluating...`);
+        break;
+
+      case "divergence":
+        setRoundsData((prev) => {
+          const updated = [...prev];
+          const currentRound = updated.find((r) => r.round === event.round);
+          if (currentRound) {
+            currentRound.divergence = {
+              score: event.score!,
+              assessment: event.assessment!,
+            };
+          }
+          return updated;
+        });
+        break;
+
       case "round_summary":
         setLoadingMessage(
           `Round ${event.round} complete — compressing context...`
@@ -153,14 +233,24 @@ export default function Home() {
         break;
 
       case "synthesis":
-        setLoadingMessage("");
         setSynthesis(event.content!);
+        setLoadingMessage("Generating Decision Journal (Counterfactual Analysis)...");
+        break;
+
+      case "counterfactual_report":
+        setCounterfactualReport(event.report as CounterfactualReport);
         break;
 
       case "debate_end":
         setAppState("complete");
         setLoadingMessage("");
         setCurrentRoundInProgress(null);
+        // Auto-save debate when done
+        // We use a timeout to ensure all state updates (synthesis etc) have processed
+        setTimeout(() => {
+          // We need to capture the LATEST state, so we might need to use refs or just rely on the fact that this runs once.
+          // Actually, saving inside useEffect when appState becomes 'complete' is safer to get full state.
+        }, 100);
         break;
 
       case "error":
@@ -179,11 +269,13 @@ export default function Home() {
       rounds: number;
       modelId: string;
       constraints?: string;
+      accessCode?: string;
     }) => {
       setAppState("debating");
       setRoundsData([]);
       setConstraintCheckContent(null);
       setSynthesis(null);
+      setCounterfactualReport(null);
       setCurrentQuestion(config.question);
       setLoadingMessage("Assembling the panel...");
       setErrorMessage("");
@@ -193,7 +285,10 @@ export default function Home() {
       try {
         const response = await fetch("/api/debate", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-code": config.accessCode || "",
+          },
           body: JSON.stringify(config),
         });
 
@@ -241,18 +336,59 @@ export default function Home() {
     [handleDebateEvent]
   );
 
+
+  // Auto-Save Effect
+  useEffect(() => {
+    if (appState === "complete" && synthesis && !currentDebateId) {
+      // Only save if it's a NEW run (no currentDebateId)
+      // If we loaded a past debate, currentDebateId will be set, so we don't duplicate save
+      const snippet = synthesis.split('\n')[0].replace(/^#+\s*/, '').slice(0, 100);
+
+      saveDebate({
+        question: currentQuestion,
+        synthesisSnippet: snippet,
+        rounds: roundsData,
+        synthesis,
+        constraintCheck: constraintCheckContent,
+        counterfactual: counterfactualReport,
+        reframing: reframingContent
+      });
+      // We won't set currentDebateId here because we don't need to track it for the session
+      // unless we want to prevent double-saving on re-renders. 
+      // The check !currentDebateId helps, but we should probably set a "hasSaved" flag ref.
+    }
+  }, [appState, synthesis]); // Run when state becomes complete and we have synthesis
+
+  // Load Debate Handler
+  const loadDebate = (saved: SavedDebate) => {
+    setRoundsData(saved.rounds);
+    setSynthesis(saved.synthesis);
+    setConstraintCheckContent(saved.constraintCheck);
+    setCounterfactualReport(saved.counterfactual);
+    setReframingContent(saved.reframing);
+    setCurrentQuestion(saved.question);
+    setCurrentDebateId(saved.id); // Mark as "loaded" so we don't auto-save again
+    setAppState("complete");
+    setLoadingMessage("");
+    setIsHistoryOpen(false);
+    setErrorMessage("");
+  };
+
   const resetDebate = () => {
     setAppState("setup");
     setRoundsData([]);
     setConstraintCheckContent(null);
     setSynthesis(null);
+    setCounterfactualReport(null);
     setReframingContent(null);
     setCurrentQuestion("");
     setLoadingMessage("");
     setErrorMessage("");
     setActiveRoundDetail(null);
     setCurrentRoundInProgress(null);
+    setCurrentDebateId(null); // Reset ID so next run triggers auto-save
   };
+
 
 
   // Build full debate text for copy
@@ -313,12 +449,27 @@ export default function Home() {
   return (
     <div className="app-container">
       <header className="app-header">
-        <h1>Delibero</h1>
-        <p>
-          AI-powered strategic debate — multiple expert personas
-          deliberate your toughest business questions
-        </p>
+        <div className="header-content">
+          <h1>Delibero</h1>
+          <p>
+            Enterprise-Grade Multi-Agent Decision Intelligence.
+            Harness the power of diverse AI experts to solve complex strategic challenges.
+          </p>
+        </div>
+        <button
+          onClick={() => setIsHistoryOpen(true)}
+          className="history-toggle-btn"
+          title="View Past Debates"
+        >
+          🕑 History
+        </button>
       </header>
+
+      <HistorySidebar
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectDebate={loadDebate}
+      />
 
       {appState === "setup" && (
         <DebateSetup
@@ -358,6 +509,7 @@ export default function Home() {
                   round={round.round}
                   agentResponses={round.agentResponses}
                   summary={round.summary}
+                  evidenceReport={round.evidenceReport}
                   isInProgress={
                     currentRoundInProgress === round.round
                   }
@@ -375,6 +527,12 @@ export default function Home() {
             )}
 
             {synthesis && <Synthesis content={synthesis} />}
+
+            {counterfactualReport && (
+              <div className="counterfactual-section-wrapper">
+                <CounterfactualReportCard report={counterfactualReport} />
+              </div>
+            )}
 
             {loadingMessage && appState === "debating" && (
               <LoadingIndicator message={loadingMessage} />
@@ -405,6 +563,9 @@ export default function Home() {
               round={detailRound.round}
               agentResponses={detailRound.agentResponses}
               summary={detailRound.summary}
+              evidenceReport={detailRound.evidenceReport}
+              crossExams={detailRound.crossExams}
+              disruptions={detailRound.disruptions}
               onClose={() => setActiveRoundDetail(null)}
             />
           )}

@@ -2,13 +2,24 @@
 
 import { useEffect, useCallback } from "react";
 import { ClientPersona } from "@/lib/engine";
-import { AgentMessage, RoundSummary } from "@/components/DebateStream";
+import { EvidenceReport } from "@/lib/evidence";
+import { CrossExamResult } from "@/lib/topology";
+import {
+    AgentMessage,
+    RoundSummary,
+    EvidenceReportCard,
+    CrossExaminationCard,
+    DisruptionCard,
+} from "@/components/DebateStream"; // Ensure these are exported from DebateStream
 import { CopyButton } from "@/components/CopyButton";
 
 interface RoundDetailPanelProps {
     round: number;
     agentResponses: { persona: ClientPersona; content: string }[];
     summary: string | null;
+    evidenceReport: EvidenceReport | null;
+    crossExams: CrossExamResult[];
+    disruptions: string[];
     onClose: () => void;
 }
 
@@ -16,6 +27,9 @@ export function RoundDetailPanel({
     round,
     agentResponses,
     summary,
+    evidenceReport,
+    crossExams,
+    disruptions,
     onClose,
 }: RoundDetailPanelProps) {
     // Build copy text for the entire round
@@ -71,6 +85,18 @@ export function RoundDetailPanel({
                         content={response.content}
                         round={round}
                     />
+                ))}
+
+                {evidenceReport && (
+                    <EvidenceReportCard round={round} report={evidenceReport} />
+                )}
+
+                {crossExams.map((exam, i) => (
+                    <CrossExaminationCard key={i} round={round} result={exam} />
+                ))}
+
+                {disruptions.map((content, i) => (
+                    <DisruptionCard key={i} round={round} content={content} />
                 ))}
 
                 {summary && (

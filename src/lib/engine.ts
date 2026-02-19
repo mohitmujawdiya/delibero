@@ -11,6 +11,17 @@ import {
     CONSTRAINT_CRITIC_SYSTEM_PROMPT,
     REFRAMING_SYSTEM_PROMPT,
 } from "./prompts";
+import { analyzeEvidence, EvidenceReport } from "./evidence";
+import {
+    selectCrossExamPairs,
+    runCrossExam,
+    scoreDivergence,
+    generateDisruption,
+    shouldExtendDebate,
+    shouldDisrupt,
+    CrossExamResult,
+} from "./topology";
+import { generateCounterfactuals, CounterfactualReport } from "./counterfactuals";
 
 // --- Safe persona type for client consumption (no system prompts) ---
 
@@ -28,9 +39,14 @@ export type DebateEvent =
     | { type: "reframing"; content: string }
     | { type: "round_start"; round: number }
     | { type: "agent_response"; round: number; persona: ClientPersona; content: string }
+    | { type: "evidence_report"; round: number; report: EvidenceReport }
+    | { type: "cross_examination"; round: number; result: CrossExamResult }
+    | { type: "divergence"; round: number; score: number; assessment: string }
+    | { type: "disruption"; round: number; content: string }
     | { type: "round_summary"; round: number; content: string }
     | { type: "constraint_check"; content: string }
     | { type: "synthesis"; content: string }
+    | { type: "counterfactual_report"; report: CounterfactualReport }
     | { type: "debate_end" }
     | { type: "error"; message: string };
 
@@ -62,6 +78,7 @@ export async function runDebate(
 
     let cumulativeSummary: string | null = null;
     const roundSummaries: string[] = [];
+    const evidenceReports: string[] = [];
 
     // --- Strategic Reframing Phase (Round 0) ---
     const reframingInput = buildReframingMessage(question, constraints);
@@ -76,7 +93,10 @@ export async function runDebate(
     // Prepend reframing context so round 1 agents see it
     const reframingContext = `## Strategic Reframing (Pre-Debate Analysis)\n${reframingAnalysis}`;
 
-    for (let round = 1; round <= rounds; round++) {
+    let effectiveRounds = rounds;
+    let hasExtended = false;
+
+    for (let round = 1; round <= effectiveRounds; round++) {
         onEvent({ type: "round_start", round });
 
         // --- Run all agents in parallel for this round ---
@@ -103,6 +123,36 @@ export async function runDebate(
             onEvent({ type: "agent_response", round, persona: stripPrompt(persona), content });
         }
 
+        // --- Evidence Grounding (claim extraction + consistency check) ---
+        const evidenceReport = await analyzeEvidence(round, agentResponses, model);
+        onEvent({ type: "evidence_report", round, report: evidenceReport });
+
+        // Store summary for synthesizer
+        if (evidenceReport.summary) {
+            evidenceReports.push(`**Round ${round} Evidence Audit:**\n${evidenceReport.summary}\n\n*Critical Contradictions:* ${evidenceReport.contradictions.length}`);
+        }
+
+        // --- Cross-Examination Phase ---
+        const crossExamPairs = selectCrossExamPairs(personas, agentResponses, 1);
+        for (const pair of crossExamPairs) {
+            const challengerResp = agentResponses.find(
+                (r) => r.persona.id === pair.challenger.id
+            );
+            const targetResp = agentResponses.find(
+                (r) => r.persona.id === pair.target.id
+            );
+            if (challengerResp && targetResp) {
+                const result = await runCrossExam(
+                    pair,
+                    challengerResp.content,
+                    targetResp.content,
+                    question,
+                    model
+                );
+                onEvent({ type: "cross_examination", round, result });
+            }
+        }
+
         // --- Summarize this round (context compression) ---
         const summarizerInput = buildSummarizerMessage(round, agentResponses);
         const roundSummary = await callLLM(
@@ -114,6 +164,29 @@ export async function runDebate(
 
         roundSummaries.push(roundSummary);
         onEvent({ type: "round_summary", round, content: roundSummary });
+
+        // --- Divergence Detection ---
+        const divergence = await scoreDivergence(roundSummary, model);
+        onEvent({
+            type: "divergence",
+            round,
+            score: divergence.score,
+            assessment: divergence.assessment,
+        });
+
+        // Check for disruption (premature consensus)
+        if (shouldDisrupt(divergence.score, round)) {
+            const disruption = await generateDisruption(question, roundSummary, model);
+            onEvent({ type: "disruption", round, content: disruption });
+            // Inject disruption into the cumulative summary so next round sees it
+            roundSummaries[roundSummaries.length - 1] += `\n\n⚠️ DISRUPTION INJECTED: ${disruption}`;
+        }
+
+        // Check for extension (high divergence in final round)
+        if (!hasExtended && shouldExtendDebate(divergence.score, round, effectiveRounds)) {
+            effectiveRounds += 1;
+            hasExtended = true;
+        }
 
         // Build cumulative summary for next round
         // Only keep last 2 round summaries to prevent context growth
@@ -142,10 +215,35 @@ export async function runDebate(
 
     onEvent({ type: "constraint_check", content: constraintAnalysis });
 
-    // --- Final synthesis (informed by constraint critic) ---
+    // --- Final synthesis (informed by constraint critic AND evidence) ---
+    // We pass the last 2 evidence reports (most recent) to avoid context overflow
+    // This allows the synthesizer to see what claims were recently flagged as verified/contradicted
+    const recentEvidenceReports = []; // In a real implementation we'd store these.
+    // NOTE: We need to store evidence reports in the loop to pass them here.
+    // Let's assume we modify the loop to store them.
+    // But since I can't modify the loop in THIS edit without a larger block,
+    // I will refactor to just pass an empty array for now or try to capture them if I can widen the scope.
+    // ACTUALLY, I should capture them.
+
+    // RE-TRIPPING: I need to declare `evidenceReports` array before the loop.
+    // I'll assume for this specific edit chunk I can't see the loop start.
+    // I will use a different strategy: I will just pass an empty array here and add the collection logic in a separate edit if needed,
+    // OR I will widen the scope to include the loop start.
+
+    // Let's widen the scope to include the loop start in a separate edit.
+    // Wait, I can't do that easily.
+
+    // Instead, I'll use a hack: I'll just pass [] for now and then add the collection logic.
+    // actually, I'll do two edits. One to init the array, one to use it.
+    // BUT I can't leave broken code.
+
+    // Let's just update the call signature first, passing [] as placeholder.
+    // Then I'll go back and add the collection.
+
     const synthesizerInput = buildSynthesizerMessage(
         question,
         roundSummaries,
+        evidenceReports,
         constraintAnalysis,
         constraints
     );
@@ -157,5 +255,16 @@ export async function runDebate(
     );
 
     onEvent({ type: "synthesis", content: synthesis });
+
+    // --- Counterfactual Analysis (Decision Journal) ---
+    // Generate a defensible record of pre-mortems and reversal triggers
+    const counterfactualReport = await generateCounterfactuals(
+        question,
+        synthesis,
+        roundSummaries,
+        model
+    );
+    onEvent({ type: "counterfactual_report", report: counterfactualReport });
+
     onEvent({ type: "debate_end" });
 }
