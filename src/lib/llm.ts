@@ -56,7 +56,7 @@ export async function callLLM(
     const isClient = typeof window !== "undefined";
 
     if (isClient) {
-        // Client: call proxy
+        // Client: call proxy (ALWAYS STREAM to avoid Vercel timeouts)
         try {
             const accessCode = localStorage.getItem("delibero_access_code") || "";
             const response = await fetch("/api/chat", {
@@ -70,6 +70,7 @@ export async function callLLM(
                     userMessage,
                     modelConfig,
                     temperature,
+                    stream: true, // Force streaming to keep connection alive
                 }),
             });
 
@@ -78,8 +79,25 @@ export async function callLLM(
                 throw new Error(errorData.error || `API Error: ${response.statusText}`);
             }
 
-            const data = await response.json();
-            return data.content || "";
+            if (!response.body) throw new Error("No response body received");
+
+            // Read stream to completion
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let fullText = "";
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    fullText += decoder.decode(value, { stream: true });
+                }
+            } finally {
+                reader.releaseLock();
+            }
+
+            return fullText;
+
         } catch (error) {
             console.error("LLM Proxy Call Failed:", error);
             throw error;
