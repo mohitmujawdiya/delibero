@@ -14,27 +14,50 @@ import { RoundCard } from "@/components/RoundCard";
 import { RoundDetailPanel } from "@/components/RoundDetailPanel";
 import { CopyButton } from "@/components/CopyButton";
 import { MarkdownContent } from "@/components/MarkdownContent";
-import { ClientPersona } from "@/lib/engine";
+import {
+  runDebate,
+  DebateConfig,
+  DebateEvent,
+  ClientPersona
+} from "@/lib/engine";
+import {
+  analyzePersonaChemistry,
+  sortPersonasByRelevance
+} from "@/lib/chemistry";
+import {
+  getPersonasByIds,
+  PERSONAS
+} from "@/lib/personas";
 import { EvidenceReport } from "@/lib/evidence";
 import { CrossExamResult, DivergenceResult } from "@/lib/topology";
 import { CounterfactualReport } from "@/lib/counterfactuals";
 import { useDebateHistory, SavedDebate } from "@/hooks/useDebateHistory";
 import { HistorySidebar } from "@/components/HistorySidebar";
 
-interface DebateEventData {
-  type: string;
-  question?: string;
-  personas?: ClientPersona[];
-  rounds?: number;
-  round?: number;
-  persona?: ClientPersona;
-  content?: string;
-  message?: string;
-  report?: EvidenceReport | CounterfactualReport; // Unified report property
-  counterfactualReport?: CounterfactualReport; // Legacy/unused
-  result?: CrossExamResult;
-  score?: number;
-  assessment?: string;
+// Resume Banner Component
+function ResumeBanner({ timestamp, onResume, onDiscard }: { timestamp: number, onResume: () => void, onDiscard: () => void }) {
+  return (
+    <div className="fixed bottom-6 right-6 max-w-sm bg-white border border-blue-200 shadow-xl rounded-lg p-4 z-50 animate-fade-in-up">
+      <h4 className="font-semibold text-gray-800 mb-1">Unfinished Debate Found</h4>
+      <p className="text-sm text-gray-600 mb-3">
+        From {new Date(timestamp).toLocaleString()}
+      </p>
+      <div className="flex gap-2">
+        <button
+          onClick={onResume}
+          className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-3 rounded transition-colors"
+        >
+          Resume
+        </button>
+        <button
+          onClick={onDiscard}
+          className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium py-2 px-3 rounded transition-colors"
+        >
+          Discard
+        </button>
+      </div>
+    </div>
+  );
 }
 
 interface RoundData {
@@ -52,9 +75,10 @@ type AppState = "setup" | "debating" | "complete" | "error";
 export default function Home() {
   const [appState, setAppState] = useState<AppState>("setup");
   // History State
-  const { saveDebate } = useDebateHistory();
+  const { saveDebate, saveDraft, getDraft, clearDraft } = useDebateHistory();
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [currentDebateId, setCurrentDebateId] = useState<string | null>(null);
+  const [draftFound, setDraftFound] = useState<{ timestamp: number } | null>(null);
 
   const [availableModels, setAvailableModels] = useState<
     { model: string; label: string }[]
@@ -91,6 +115,37 @@ export default function Home() {
       });
   }, []);
 
+  // Check for draft on mount
+  useEffect(() => {
+    const draft = getDraft();
+    if (draft && draft.appState === "debating") {
+      setDraftFound({ timestamp: draft.timestamp });
+    }
+  }, []);
+
+  // Auto-Save Draft Effect
+  useEffect(() => {
+    if (appState === "debating" && roundsData.length > 0) {
+      saveDraft({
+        appState,
+        roundsData,
+        currentQuestion,
+        currentRoundInProgress,
+        constraints: constraintCheckContent, // Note: constraints might be in a different var name
+        activeRoundDetail,
+        // Save other necessary state
+        reframingContent,
+        synthesis,
+        constraintCheckContent,
+        counterfactualReport
+      });
+    } else if (appState === "complete" || appState === "setup") {
+      if (appState === "complete") {
+        clearDraft();
+      }
+    }
+  }, [appState, roundsData, currentQuestion, currentRoundInProgress, reframingContent, synthesis, constraintCheckContent, counterfactualReport]);
+
   // Auto-scroll to bottom as debate progresses
   useEffect(() => {
     if (appState === "debating" || appState === "complete") {
@@ -98,7 +153,7 @@ export default function Home() {
     }
   }, [roundsData, synthesis, constraintCheckContent, appState]);
 
-  const handleDebateEvent = useCallback((event: DebateEventData) => {
+  const handleDebateEvent = useCallback((event: DebateEvent) => {
     switch (event.type) {
       case "debate_start":
         setLoadingMessage("Reframing the strategic question...");
@@ -135,12 +190,22 @@ export default function Home() {
             (r) => r.round === event.round
           );
           if (currentRound) {
-            // Deduplicate: skip if this persona already responded in this round
-            const alreadyResponded =
-              currentRound.agentResponses.some(
-                (r) => r.persona.id === event.persona!.id
-              );
-            if (!alreadyResponded) {
+            // Check if we already have an entry for this persona
+            const existingEntryIndex = currentRound.agentResponses.findIndex(
+              (r) => r.persona.id === event.persona!.id
+            );
+
+            if (existingEntryIndex !== -1) {
+              // Update existing entry with new cumulative content
+              // We create a new object to ensure React detects the change
+              const newResponses = [...currentRound.agentResponses];
+              newResponses[existingEntryIndex] = {
+                ...newResponses[existingEntryIndex],
+                content: event.content!
+              };
+              currentRound.agentResponses = newResponses;
+            } else {
+              // Add new entry
               currentRound.agentResponses = [
                 ...currentRound.agentResponses,
                 {
@@ -245,12 +310,7 @@ export default function Home() {
         setAppState("complete");
         setLoadingMessage("");
         setCurrentRoundInProgress(null);
-        // Auto-save debate when done
-        // We use a timeout to ensure all state updates (synthesis etc) have processed
-        setTimeout(() => {
-          // We need to capture the LATEST state, so we might need to use refs or just rely on the fact that this runs once.
-          // Actually, saving inside useEffect when appState becomes 'complete' is safer to get full state.
-        }, 100);
+        // Auto-save happens in the effect
         break;
 
       case "error":
@@ -277,54 +337,90 @@ export default function Home() {
       setSynthesis(null);
       setCounterfactualReport(null);
       setCurrentQuestion(config.question);
-      setLoadingMessage("Assembling the panel...");
+      setLoadingMessage("Initializing debate engine...");
       setErrorMessage("");
       setActiveRoundDetail(null);
       setCurrentRoundInProgress(null);
 
+      // Store access code in localStorage for proxy usage
+      if (config.accessCode) {
+        localStorage.setItem("delibero_access_code", config.accessCode);
+      }
+
       try {
-        const response = await fetch("/api/debate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-access-code": config.accessCode || "",
-          },
-          body: JSON.stringify(config),
-        });
+        const selectedModel = availableModels.find(m => m.model === config.modelId);
+        if (!selectedModel) throw new Error("Selected model not found");
 
-        if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.error || "Failed to start debate");
-        }
+        const modelConfig = {
+          provider: selectedModel.model.startsWith("gpt") ? "openai" as const : "anthropic" as const,
+          model: selectedModel.model,
+          label: selectedModel.label
+        };
 
-        const reader = response.body?.getReader();
-        if (!reader) throw new Error("No response stream");
+        // --- Client-Side Chemistry (if auto) ---
+        let selectedPersonas = [];
+        const isAuto = !config.personaIds || config.personaIds.length === 0 || config.personaIds[0] === "auto";
 
-        const decoder = new TextDecoder();
-        let buffer = "";
+        if (isAuto) {
+          handleDebateEvent({ type: "reframing", content: "🔬 **Analyzing Question DNA...**\n\nIdentifying the core conflict and assembling the optimal expert panel." } as any);
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          try {
+            const analysis = await analyzePersonaChemistry(config.question, PERSONAS, modelConfig);
 
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
+            // Mandatory Ops
+            const mandatoryId = "devils-advocate";
+            const mandatoryPersona = PERSONAS.find(p => p.id === mandatoryId);
 
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            const jsonStr = line.slice(6).trim();
-            if (!jsonStr) continue;
+            // Sort
+            const sorted = sortPersonasByRelevance(PERSONAS, analysis.recommendedPersonas);
+            const candidates = sorted.filter(p => p.id !== mandatoryId);
 
-            try {
-              const event: DebateEventData = JSON.parse(jsonStr);
-              handleDebateEvent(event);
-            } catch {
-              // Skip malformed JSON
-            }
+            // Select
+            const panelSize = analysis.recommendedPanelSize;
+            const selection = candidates.slice(0, panelSize - 1);
+            const finalSet = mandatoryPersona ? [mandatoryPersona, ...selection] : selection.slice(0, panelSize);
+
+            // Re-sort for display (chemistry order)
+            selectedPersonas = sortPersonasByRelevance(finalSet, analysis.recommendedPersonas);
+
+            // Emit Reframing Update
+            handleDebateEvent({
+              type: "reframing",
+              content: `**Panel Chemistry Analysis Completed**
+Category: **${analysis.questionCategory}** | Complexity: **${analysis.complexityScore}/10**
+Recommended Panel Size: **${panelSize} Experts**
+
+**Selected Experts:**
+${selectedPersonas.map(p => {
+                const score = analysis.recommendedPersonas.find(r => r.personaId === p.id)?.relevanceScore || 0;
+                return `- **${p.name}** (${p.role}) — Match Score: ${score}%`;
+              }).join("\n")}`
+            } as any);
+
+          } catch (e) {
+            console.error("Chemistry failed, fallback", e);
+            selectedPersonas = PERSONAS.slice(0, 3);
           }
+        } else {
+          selectedPersonas = getPersonasByIds(config.personaIds);
         }
+
+        if (selectedPersonas.length < 2) selectedPersonas = PERSONAS.slice(0, 2);
+
+        // --- Run Debate (Client-Side) ---
+        const debateConfig: DebateConfig = {
+          question: config.question,
+          personas: selectedPersonas,
+          rounds: config.rounds,
+          model: modelConfig,
+          constraints: config.constraints
+        };
+
+        // Execute locally!
+        await runDebate(debateConfig, handleDebateEvent);
+
       } catch (err) {
+        console.error("Debate Error:", err);
         setErrorMessage(
           err instanceof Error
             ? err.message
@@ -333,7 +429,7 @@ export default function Home() {
         setAppState("error");
       }
     },
-    [handleDebateEvent]
+    [handleDebateEvent, availableModels]
   );
 
 
@@ -446,8 +542,40 @@ export default function Home() {
     );
   }
 
+  const handleResumeDraft = () => {
+    const draft = getDraft();
+    if (draft) {
+      setAppState(draft.appState);
+      setRoundsData(draft.roundsData);
+      setCurrentQuestion(draft.currentQuestion);
+      setCurrentRoundInProgress(draft.currentRoundInProgress);
+      setConstraintCheckContent(draft.constraints); // Restoring constraints
+      setActiveRoundDetail(draft.activeRoundDetail);
+      setReframingContent(draft.reframingContent);
+      setSynthesis(draft.synthesis);
+      setConstraintCheckContent(draft.constraintCheckContent); // Overwrite if both present (should assume consistent naming in future)
+      setCounterfactualReport(draft.counterfactualReport);
+
+      setDraftFound(null); // Hide banner
+      // Note: we don't clear draft yet, will clear on completion or discard
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    setDraftFound(null);
+  };
+
   return (
     <div className="app-container">
+      {draftFound && (
+        <ResumeBanner
+          timestamp={draftFound.timestamp}
+          onResume={handleResumeDraft}
+          onDiscard={handleDiscardDraft}
+        />
+      )}
+
       <header className="app-header">
         <div className="header-content">
           <h1>Delibero</h1>

@@ -1,5 +1,5 @@
 import { Persona } from "./personas";
-import { ModelConfig, callLLM } from "./llm";
+import { ModelConfig, callLLM, streamLLM } from "./llm";
 import {
     buildAgentUserMessage,
     buildSummarizerMessage,
@@ -112,8 +112,37 @@ export async function runDebate(
         );
 
         const agentPromises = personas.map(async (persona) => {
-            const content = await callLLM(persona.systemPrompt, userMessage, model);
-            return { persona, content };
+            // Stream the response
+            const stream = await streamLLM(persona.systemPrompt, userMessage, model);
+            const reader = stream.getReader();
+            const decoder = new TextDecoder();
+            let fullContent = "";
+
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullContent += chunk;
+
+                    // Emit partial update
+                    // We send the safe persona and the cumulative content so far
+                    onEvent({
+                        type: "agent_response",
+                        round,
+                        persona: stripPrompt(persona),
+                        content: fullContent,
+                    });
+                }
+            } catch (err) {
+                console.error(`Error streaming response for ${persona.name}:`, err);
+                throw err;
+            } finally {
+                reader.releaseLock();
+            }
+
+            return { persona, content: fullContent };
         });
 
         const agentResponses = await Promise.all(agentPromises);

@@ -52,5 +52,34 @@ export function useDebateHistory() {
         localStorage.removeItem("delibero_history");
     };
 
-    return { saveDebate, getHistory, deleteDebate, clearHistory };
+    // --- Draft Management (Session Recovery) ---
+
+    const saveDraft = (state: any) => {
+        try {
+            if (!state) return;
+            localStorage.setItem("delibero_draft", JSON.stringify({
+                ...state,
+                timestamp: Date.now()
+            }));
+        } catch (e) {
+            console.error("Failed to save draft", e);
+        }
+    };
+
+    const getDraft = () => {
+        if (typeof window === "undefined") return null;
+        try {
+            const item = localStorage.getItem("delibero_draft");
+            return item ? JSON.parse(item) : null;
+        } catch (e) {
+            console.error("Failed to load draft", e);
+            return null;
+        }
+    };
+
+    const clearDraft = () => {
+        localStorage.removeItem("delibero_draft");
+    };
+
+    return { saveDebate, getHistory, deleteDebate, clearHistory, saveDraft, getDraft, clearDraft };
 }

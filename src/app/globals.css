@@ -499,6 +499,7 @@ body {
   line-height: 1.7;
   color: var(--text-secondary);
   margin-bottom: 10px;
+  /* white-space: pre-wrap; Removed */
 }
 
 .round-card-details-btn {
@@ -548,6 +549,7 @@ body {
   font-size: 0.92rem;
   line-height: 1.7;
   color: var(--text-primary);
+  /* white-space: pre-wrap; Removed */
 }
 
 /* ======== DETAIL PANEL (Slide-over) ======== */
@@ -651,9 +653,9 @@ body {
 }
 
 .agent-content {
-  font-size: 0.92rem;
   line-height: 1.75;
   color: var(--text-primary);
+  /* white-space: pre-wrap; Removed */
 }
 
 .agent-content p {
@@ -729,7 +731,7 @@ body {
   font-size: 0.88rem;
   line-height: 1.7;
   color: var(--text-secondary);
-  white-space: pre-wrap;
+  /* white-space: pre-wrap; Removed to prevent double-spacing with Markdown */
 }
 
 /* ======== DEBATE ACTIONS BAR ======== */
@@ -836,7 +838,7 @@ body {
   font-size: 0.9rem;
   line-height: 1.7;
   color: var(--text-primary);
-  white-space: pre-wrap;
+  /* white-space: pre-wrap; Removed to prevent double-spacing with Markdown */
 }
 
 .constraint-check-content p {
