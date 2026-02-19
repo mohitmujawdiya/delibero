@@ -47,5 +47,3 @@ The core engine follows a strict, multi-stage topology for every round:
 ### 3. Edge-First API
 - **Runtime**: `/api/chat` runs on **Vercel Edge Runtime** to bypass the standard 10s serverless timeout, allowing for deep-thinking models to run to completion.
 - **Security**: Stateless API design protected by a `DELIBERO_ACCESS_CODE` to prevent unauthorized usage.
-
-All Rights Reserved. Closed Source.
