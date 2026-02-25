@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI } from "@google/genai";
 
-export type ModelProvider = "openai" | "anthropic";
+export type ModelProvider = "openai" | "anthropic" | "gemini";
 
 export interface ModelConfig {
     provider: ModelProvider;
@@ -23,6 +24,8 @@ export const AVAILABLE_MODELS: ModelConfig[] = [
         model: "claude-3-5-haiku-20241022",
         label: "Claude 3.5 Haiku (Cheaper)",
     },
+    { provider: "gemini", model: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    { provider: "gemini", model: "gemini-2.5-flash", label: "Gemini 2.5 Flash (Cheaper)" },
 ];
 
 /**
@@ -32,6 +35,7 @@ export function getAvailableProviders(): ModelProvider[] {
     const providers: ModelProvider[] = [];
     if (process.env.OPENAI_API_KEY) providers.push("openai");
     if (process.env.ANTHROPIC_API_KEY) providers.push("anthropic");
+    if (process.env.GEMINI_API_KEY) providers.push("gemini");
     return providers;
 }
 
@@ -110,8 +114,16 @@ export async function callLLM(
         // Server: call direct
         if (modelConfig.provider === "openai") {
             return callOpenAI(systemPrompt, userMessage, modelConfig.model, temperature, modelConfig.apiKey);
-        } else {
+        } else if (modelConfig.provider === "anthropic") {
             return callAnthropic(
+                systemPrompt,
+                userMessage,
+                modelConfig.model,
+                temperature,
+                modelConfig.apiKey
+            );
+        } else {
+            return callGemini(
                 systemPrompt,
                 userMessage,
                 modelConfig.model,
@@ -159,6 +171,26 @@ async function callAnthropic(
     });
     const block = response.content[0];
     return block.type === "text" ? block.text : "";
+}
+
+async function callGemini(
+    systemPrompt: string,
+    userMessage: string,
+    model: string,
+    temperature: number,
+    apiKey?: string
+): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.GEMINI_API_KEY });
+    const response = await ai.models.generateContent({
+        model,
+        contents: userMessage,
+        config: {
+            systemInstruction: systemPrompt,
+            temperature,
+            maxOutputTokens: 800
+        }
+    });
+    return response.text || "";
 }
 
 /**
@@ -210,8 +242,16 @@ export async function streamLLM(
         // Server: call direct streaming methods
         if (modelConfig.provider === "openai") {
             return streamOpenAI(systemPrompt, userMessage, modelConfig.model, temperature, modelConfig.apiKey);
-        } else {
+        } else if (modelConfig.provider === "anthropic") {
             return streamAnthropic(
+                systemPrompt,
+                userMessage,
+                modelConfig.model,
+                temperature,
+                modelConfig.apiKey
+            );
+        } else {
+            return streamGemini(
                 systemPrompt,
                 userMessage,
                 modelConfig.model,
@@ -279,6 +319,36 @@ async function streamAnthropic(
                     chunk.delta.type === "text_delta"
                 ) {
                     controller.enqueue(new TextEncoder().encode(chunk.delta.text));
+                }
+            }
+            controller.close();
+        },
+    });
+}
+
+async function streamGemini(
+    systemPrompt: string,
+    userMessage: string,
+    model: string,
+    temperature: number,
+    apiKey?: string
+): Promise<ReadableStream<Uint8Array>> {
+    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.GEMINI_API_KEY });
+    const responseStream = await ai.models.generateContentStream({
+        model,
+        contents: userMessage,
+        config: {
+            systemInstruction: systemPrompt,
+            temperature,
+            maxOutputTokens: 800
+        }
+    });
+
+    return new ReadableStream({
+        async start(controller) {
+            for await (const chunk of responseStream) {
+                if (chunk.text) {
+                    controller.enqueue(new TextEncoder().encode(chunk.text));
                 }
             }
             controller.close();

@@ -82,9 +82,9 @@ export default function Home() {
   const [draftFound, setDraftFound] = useState<{ timestamp: number } | null>(null);
 
   const [availableModels, setAvailableModels] = useState<
-    { model: string; label: string }[]
+    { model: string; label: string; provider: "openai" | "anthropic" | "gemini" }[]
   >([]);
-  const [hasKeys, setHasKeys] = useState(true);
+  const [serverProviders, setServerProviders] = useState<string[]>([]);
   const [roundsData, setRoundsData] = useState<RoundData[]>([]);
   const [constraintCheckContent, setConstraintCheckContent] = useState<
     string | null
@@ -110,10 +110,10 @@ export default function Home() {
       .then((res) => res.json())
       .then((data) => {
         setAvailableModels(data.models || []);
-        setHasKeys(data.hasKeys);
+        setServerProviders(data.serverProviders || []);
       })
       .catch(() => {
-        setHasKeys(false);
+        setServerProviders([]);
       });
   }, []);
 
@@ -379,7 +379,7 @@ export default function Home() {
         if (!selectedModel) throw new Error("Selected model not found");
 
         const modelConfig = {
-          provider: selectedModel.model.startsWith("gpt") ? "openai" as const : "anthropic" as const,
+          provider: selectedModel.provider,
           model: selectedModel.model,
           label: selectedModel.label,
           apiKey: config.apiKey
@@ -552,32 +552,6 @@ ${selectedPersonas.map(p => {
 
   // --- Render ---
 
-  if (!hasKeys) {
-    return (
-      <div className="app-container">
-        <header className="app-header">
-          <h1>Delibero</h1>
-          <p>Multi-Agent Strategic Debate Platform</p>
-        </header>
-        <div className="no-keys-banner">
-          <h2>🔑 API Keys Required</h2>
-          <p>
-            Add your LLM API key(s) to <code>.env.local</code> in
-            the project root:
-          </p>
-          <p style={{ marginTop: 12 }}>
-            <code>OPENAI_API_KEY=sk-...</code>
-            <br />
-            <code>ANTHROPIC_API_KEY=sk-ant-...</code>
-          </p>
-          <p style={{ marginTop: 12 }}>
-            Then restart the dev server.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   const handleResumeDraft = () => {
     const draft = getDraft();
     if (draft) {
@@ -614,7 +588,24 @@ ${selectedPersonas.map(p => {
 
       <header className="app-header">
         <div className="header-content">
-          <h1>Delibero</h1>
+          <h1
+            onClick={() => {
+              if (appState !== 'setup') {
+                if (confirm("Are you sure you want to abandon this debate and start a new one?")) {
+                  setAppState('setup');
+                  setRoundsData([]);
+                  setCurrentRoundInProgress(1);
+                  setCounterfactualReport(null);
+                  setSynthesis(null);
+                  setReframingContent(null);
+                }
+              }
+            }}
+            style={{ cursor: appState !== 'setup' ? 'pointer' : 'default' }}
+            title={appState !== 'setup' ? "Return to Home Setup" : ""}
+          >
+            Delibero
+          </h1>
           <p>
             Enterprise-Grade Multi-Agent Decision Intelligence.
             Harness the power of diverse AI experts to solve complex strategic challenges.
@@ -639,6 +630,7 @@ ${selectedPersonas.map(p => {
         <DebateSetup
           onStart={startDebate}
           availableModels={availableModels}
+          serverProviders={serverProviders}
           isLoading={false}
           requireApiKey={freeDebateExhausted}
         />
