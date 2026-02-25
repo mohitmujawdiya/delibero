@@ -55,18 +55,22 @@ interface DebateSetupProps {
         modelId: string;
         constraints?: string;
         accessCode?: string;
+        apiKey?: string;
     }) => void;
     availableModels: { model: string; label: string }[];
     isLoading: boolean;
+    requireApiKey?: boolean;
 }
 
 export function DebateSetup({
     onStart,
     availableModels,
     isLoading,
+    requireApiKey,
 }: DebateSetupProps) {
     const [question, setQuestion] = useState("");
     const [constraints, setConstraints] = useState("");
+    const [userApiKey, setUserApiKey] = useState("");
     const [selectedPersonas, setSelectedPersonas] = useState<string[]>([
         "cfo",
         "strategist",
@@ -102,7 +106,8 @@ export function DebateSetup({
     const canStart =
         question.trim().length > 10 &&
         (autoSelect || (selectedPersonas.length >= 2 && selectedPersonas.length <= 5)) &&
-        modelId;
+        modelId &&
+        (!requireApiKey || userApiKey.trim().length > 10);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -114,6 +119,7 @@ export function DebateSetup({
             modelId,
             constraints: constraints.trim() || undefined,
             accessCode: accessCode.trim() || undefined,
+            apiKey: userApiKey.trim() || undefined,
         });
     };
 
@@ -222,6 +228,30 @@ export function DebateSetup({
                     </div>
                 </div>
             </div>
+
+            {requireApiKey && (
+                <div className="setup-section error-banner" style={{ background: "#fff5f5", border: "1px solid #feb2b2", padding: "16px", borderRadius: "8px" }}>
+                    <div style={{ marginBottom: "12px", color: "#c53030", fontWeight: "600" }}>
+                        🎉 You&apos;ve used your one free debate!
+                    </div>
+                    <p style={{ fontSize: "0.9rem", color: "#4a5568", marginBottom: "16px", lineHeight: "1.4" }}>
+                        As much as we love AI, artificial money hasn&apos;t been invented yet. Please enter your API key to continue debating. Your key is only used locally and is never stored on our servers.
+                    </p>
+                    <label className="setup-label" htmlFor="apiKey">
+                        {modelId.startsWith("gpt") ? "OpenAI API Key" : "Anthropic API Key"}
+                    </label>
+                    <input
+                        type="password"
+                        id="apiKey"
+                        className="constraints-input"
+                        placeholder="sk-..."
+                        value={userApiKey}
+                        onChange={(e) => setUserApiKey(e.target.value)}
+                        disabled={isLoading}
+                        style={{ background: "white", padding: "10px" }}
+                    />
+                </div>
+            )}
 
             <button
                 type="submit"

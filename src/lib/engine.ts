@@ -136,7 +136,10 @@ export async function runDebate(
                     });
                 }
             } catch (err) {
-                console.error(`Error streaming response for ${persona.name}:`, err);
+                const errorMsg = err instanceof Error ? err.message : String(err);
+                if (!errorMsg.includes("FREE_LIMIT_REACHED") && !errorMsg.includes("Free Debate Exhaused")) {
+                    console.error(`Error streaming response for ${persona.name}:`, err);
+                }
                 throw err;
             } finally {
                 reader.releaseLock();

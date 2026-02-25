@@ -11,6 +11,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.77.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.36.2",
+    "@vercel/kv": "^3.0.0",
     "ai": "^6.0.91",
     "next": "16.1.6",
     "openai": "^6.22.0",

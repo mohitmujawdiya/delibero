@@ -95,6 +95,7 @@ export default function Home() {
   const [currentQuestion, setCurrentQuestion] = useState("");
   const [loadingMessage, setLoadingMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [freeDebateExhausted, setFreeDebateExhausted] = useState(false);
   const [activeRoundDetail, setActiveRoundDetail] = useState<number | null>(
     null
   );
@@ -332,10 +333,17 @@ export default function Home() {
         break;
 
       case "error":
-        setErrorMessage(
-          event.message || "Unknown error during debate"
-        );
-        setAppState("error");
+        // Handle specific rate limit error
+        if (event.message?.includes("FREE_LIMIT_REACHED") || event.message?.includes("Free Debate Exhaused")) {
+          setFreeDebateExhausted(true);
+          setAppState("setup"); // Kick back to setup
+          setErrorMessage("You've used your one free debate! Please enter your API key to continue.");
+        } else {
+          setErrorMessage(
+            event.message || "Unknown error during debate"
+          );
+          setAppState("error");
+        }
         break;
     }
   }, []);
@@ -348,6 +356,7 @@ export default function Home() {
       modelId: string;
       constraints?: string;
       accessCode?: string;
+      apiKey?: string;
     }) => {
       setAppState("debating");
       setRoundsData([]);
@@ -372,7 +381,8 @@ export default function Home() {
         const modelConfig = {
           provider: selectedModel.model.startsWith("gpt") ? "openai" as const : "anthropic" as const,
           model: selectedModel.model,
-          label: selectedModel.label
+          label: selectedModel.label,
+          apiKey: config.apiKey
         };
 
         // --- Client-Side Chemistry (if auto) ---
@@ -416,6 +426,10 @@ ${selectedPersonas.map(p => {
             } as any);
 
           } catch (e) {
+            const errorMsg = e instanceof Error ? e.message : String(e);
+            if (errorMsg.includes("FREE_LIMIT_REACHED") || errorMsg.includes("Free Debate Exhaused")) {
+              throw e; // Bubble up rate limit error to trigger UI banner
+            }
             console.error("Chemistry failed, fallback", e);
             selectedPersonas = PERSONAS.slice(0, 3);
           }
@@ -438,13 +452,17 @@ ${selectedPersonas.map(p => {
         await runDebate(debateConfig, handleDebateEvent);
 
       } catch (err) {
-        console.error("Debate Error:", err);
-        setErrorMessage(
-          err instanceof Error
-            ? err.message
-            : "An unexpected error occurred"
-        );
-        setAppState("error");
+        const errorMsg = err instanceof Error ? err.message : String(err);
+
+        if (errorMsg.includes("FREE_LIMIT_REACHED") || errorMsg.includes("Free Debate Exhaused")) {
+          setFreeDebateExhausted(true);
+          setAppState("setup"); // Kick back to setup
+          setErrorMessage("You've used your one free debate! Please enter your API key to continue.");
+        } else {
+          console.error("Debate Error:", err);
+          setErrorMessage(errorMsg || "An unexpected error occurred");
+          setAppState("error");
+        }
       }
     },
     [handleDebateEvent, availableModels]
@@ -622,6 +640,7 @@ ${selectedPersonas.map(p => {
           onStart={startDebate}
           availableModels={availableModels}
           isLoading={false}
+          requireApiKey={freeDebateExhausted}
         />
       )}
 

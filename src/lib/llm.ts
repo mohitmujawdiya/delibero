@@ -7,6 +7,7 @@ export interface ModelConfig {
     provider: ModelProvider;
     model: string;
     label: string;
+    apiKey?: string;
 }
 
 export const AVAILABLE_MODELS: ModelConfig[] = [
@@ -99,19 +100,23 @@ export async function callLLM(
             return fullText;
 
         } catch (error) {
-            console.error("LLM Proxy Call Failed:", error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            if (!errorMsg.includes("FREE_LIMIT_REACHED") && !errorMsg.includes("Free Debate Exhaused")) {
+                console.error("LLM Proxy Call Failed:", error);
+            }
             throw error;
         }
     } else {
         // Server: call direct
         if (modelConfig.provider === "openai") {
-            return callOpenAI(systemPrompt, userMessage, modelConfig.model, temperature);
+            return callOpenAI(systemPrompt, userMessage, modelConfig.model, temperature, modelConfig.apiKey);
         } else {
             return callAnthropic(
                 systemPrompt,
                 userMessage,
                 modelConfig.model,
-                temperature
+                temperature,
+                modelConfig.apiKey
             );
         }
     }
@@ -121,9 +126,10 @@ async function callOpenAI(
     systemPrompt: string,
     userMessage: string,
     model: string,
-    temperature: number
+    temperature: number,
+    apiKey?: string
 ): Promise<string> {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
     const response = await client.chat.completions.create({
         model,
         temperature,
@@ -140,9 +146,10 @@ async function callAnthropic(
     systemPrompt: string,
     userMessage: string,
     model: string,
-    temperature: number
+    temperature: number,
+    apiKey?: string
 ): Promise<string> {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
         model,
         max_tokens: 800,
@@ -193,19 +200,23 @@ export async function streamLLM(
             if (!response.body) throw new Error("No response body received");
             return response.body;
         } catch (error) {
-            console.error("LLM Proxy Stream Failed:", error);
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            if (!errorMsg.includes("FREE_LIMIT_REACHED") && !errorMsg.includes("Free Debate Exhaused")) {
+                console.error("LLM Proxy Stream Failed:", error);
+            }
             throw error;
         }
     } else {
         // Server: call direct streaming methods
         if (modelConfig.provider === "openai") {
-            return streamOpenAI(systemPrompt, userMessage, modelConfig.model, temperature);
+            return streamOpenAI(systemPrompt, userMessage, modelConfig.model, temperature, modelConfig.apiKey);
         } else {
             return streamAnthropic(
                 systemPrompt,
                 userMessage,
                 modelConfig.model,
-                temperature
+                temperature,
+                modelConfig.apiKey
             );
         }
     }
@@ -215,9 +226,10 @@ async function streamOpenAI(
     systemPrompt: string,
     userMessage: string,
     model: string,
-    temperature: number
+    temperature: number,
+    apiKey?: string
 ): Promise<ReadableStream<Uint8Array>> {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const client = new OpenAI({ apiKey: apiKey || process.env.OPENAI_API_KEY });
     const stream = await client.chat.completions.create({
         model,
         temperature,
@@ -246,9 +258,10 @@ async function streamAnthropic(
     systemPrompt: string,
     userMessage: string,
     model: string,
-    temperature: number
+    temperature: number,
+    apiKey?: string
 ): Promise<ReadableStream<Uint8Array>> {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey: apiKey || process.env.ANTHROPIC_API_KEY });
     const stream = await client.messages.create({
         model,
         max_tokens: 800,

@@ -1,5 +1,15 @@
 import { NextRequest } from "next/server";
 import { callLLM, streamLLM, ModelConfig } from "@/lib/llm";
+import { Ratelimit } from "@upstash/ratelimit";
+import { Redis } from "@upstash/redis";
+
+// Create a new ratelimiter, that allows 1 request per 30 days.
+// This enforces the "1 free debate" rule.
+const ratelimit = new Ratelimit({
+    redis: Redis.fromEnv(),
+    limiter: Ratelimit.slidingWindow(1, "30 d"),
+    analytics: true,
+});
 
 
 // Switch to Edge Runtime for better streaming support and no 10s/60s timeout
@@ -35,6 +45,29 @@ export async function POST(req: NextRequest) {
                 { status: 400, headers: { "Content-Type": "application/json" } }
             );
         }
+
+        // --- Rate Limiting Logic ---
+        // If the user did NOT provide an API key, we enforce the "1 free debate" rule via their IP.
+        if (!modelConfig.apiKey) {
+            const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+
+            try {
+                const { success } = await ratelimit.limit(ip);
+                if (!success) {
+                    return new Response(
+                        JSON.stringify({
+                            error: "Free Debate Exhaused",
+                            code: "FREE_LIMIT_REACHED"
+                        }),
+                        { status: 429, headers: { "Content-Type": "application/json" } }
+                    );
+                }
+            } catch (ratelimitError) {
+                console.error("Rate limiting failed, allowing request to proceed:", ratelimitError);
+                // Fail open if Redis is down, or fail closed? Usually best to fail open or alert.
+            }
+        }
+        // --- End Rate Limiting Logic ---
 
         // Force server-side execution of callLLM
         // We know we are on the server here, so current callLLM (before refactor) works.
