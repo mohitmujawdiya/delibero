@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+
 export interface SavedDebate {
     id: string; // timestamp
     date: string;
@@ -12,7 +14,18 @@ export interface SavedDebate {
 }
 
 export function useDebateHistory() {
-    const saveDebate = (debate: Omit<SavedDebate, "id" | "date">) => {
+    const getHistory = useCallback((): SavedDebate[] => {
+        if (typeof window === "undefined") return [];
+        try {
+            const item = localStorage.getItem("delibero_history");
+            return item ? JSON.parse(item) : [];
+        } catch (e) {
+            console.error("Failed to load history", e);
+            return [];
+        }
+    }, []);
+
+    const saveDebate = useCallback((debate: Omit<SavedDebate, "id" | "date">) => {
         try {
             const history = getHistory();
             const newDebate: SavedDebate = {
@@ -28,33 +41,22 @@ export function useDebateHistory() {
             console.error("Failed to save debate history", e);
             return false;
         }
-    };
+    }, [getHistory]);
 
-    const getHistory = (): SavedDebate[] => {
-        if (typeof window === "undefined") return [];
-        try {
-            const item = localStorage.getItem("delibero_history");
-            return item ? JSON.parse(item) : [];
-        } catch (e) {
-            console.error("Failed to load history", e);
-            return [];
-        }
-    };
-
-    const deleteDebate = (id: string) => {
+    const deleteDebate = useCallback((id: string) => {
         const history = getHistory();
         const updated = history.filter((d) => d.id !== id);
         localStorage.setItem("delibero_history", JSON.stringify(updated));
         return updated; // Return updated list for UI update
-    };
+    }, [getHistory]);
 
-    const clearHistory = () => {
+    const clearHistory = useCallback(() => {
         localStorage.removeItem("delibero_history");
-    };
+    }, []);
 
     // --- Draft Management (Session Recovery) ---
 
-    const saveDraft = (state: any) => {
+    const saveDraft = useCallback((state: any) => {
         try {
             if (!state) return;
             localStorage.setItem("delibero_draft", JSON.stringify({
@@ -64,9 +66,9 @@ export function useDebateHistory() {
         } catch (e) {
             console.error("Failed to save draft", e);
         }
-    };
+    }, []);
 
-    const getDraft = () => {
+    const getDraft = useCallback(() => {
         if (typeof window === "undefined") return null;
         try {
             const item = localStorage.getItem("delibero_draft");
@@ -75,11 +77,11 @@ export function useDebateHistory() {
             console.error("Failed to load draft", e);
             return null;
         }
-    };
+    }, []);
 
-    const clearDraft = () => {
+    const clearDraft = useCallback(() => {
         localStorage.removeItem("delibero_draft");
-    };
+    }, []);
 
     return { saveDebate, getHistory, deleteDebate, clearHistory, saveDraft, getDraft, clearDraft };
 }

@@ -62,6 +62,13 @@ interface DebateSetupProps {
     serverProviders: string[];
     isLoading: boolean;
     requireApiKey?: boolean;
+    initialConfig?: {
+        question: string;
+        constraints: string;
+        personaIds: string[];
+        rounds: number;
+        modelId: string;
+    };
 }
 
 export function DebateSetup({
@@ -70,23 +77,24 @@ export function DebateSetup({
     serverProviders,
     isLoading,
     requireApiKey,
+    initialConfig,
 }: DebateSetupProps) {
-    const [question, setQuestion] = useState("");
-    const [constraints, setConstraints] = useState("");
+    const [question, setQuestion] = useState(initialConfig?.question || "");
+    const [constraints, setConstraints] = useState(initialConfig?.constraints || "");
     const [customKeys, setCustomKeys] = useState<{ openai: string; anthropic: string; gemini: string }>({
         openai: "",
         anthropic: "",
         gemini: "",
     });
     const [showAdvanced, setShowAdvanced] = useState(false);
-    const [selectedPersonas, setSelectedPersonas] = useState<string[]>([
+    const [selectedPersonas, setSelectedPersonas] = useState<string[]>(initialConfig?.personaIds || [
         "cfo",
         "strategist",
         "devils-advocate",
     ]);
-    const [rounds, setRounds] = useState(3);
+    const [rounds, setRounds] = useState(initialConfig?.rounds || 3);
     const [accessCode, setAccessCode] = useState("");
-    const [modelId, setModelId] = useState(availableModels[0]?.model || "");
+    const [modelId, setModelId] = useState(initialConfig?.modelId || availableModels[0]?.model || "");
 
     // Auto-expand advanced settings if requireApiKey is triggered (free tier exhausted)
     useEffect(() => {

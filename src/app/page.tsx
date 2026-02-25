@@ -96,6 +96,13 @@ export default function Home() {
   const [loadingMessage, setLoadingMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [freeDebateExhausted, setFreeDebateExhausted] = useState(false);
+  const [failedConfig, setFailedConfig] = useState<{
+    question: string;
+    constraints: string;
+    personaIds: string[];
+    rounds: number;
+    modelId: string;
+  } | undefined>(undefined);
   const [activeRoundDetail, setActiveRoundDetail] = useState<number | null>(
     null
   );
@@ -359,6 +366,7 @@ export default function Home() {
       apiKey?: string;
     }) => {
       setAppState("debating");
+      setFailedConfig(undefined); // Clear old config on fresh attempt
       setRoundsData([]);
       setConstraintCheckContent(null);
       setSynthesis(null);
@@ -457,6 +465,16 @@ ${selectedPersonas.map(p => {
         if (errorMsg.includes("FREE_LIMIT_REACHED") || errorMsg.includes("Free Debate Exhaused")) {
           setFreeDebateExhausted(true);
           setAppState("setup"); // Kick back to setup
+
+          // Save the configuration so DebateSetup can restore it
+          setFailedConfig({
+            question: config.question,
+            constraints: config.constraints || "",
+            personaIds: config.personaIds,
+            rounds: config.rounds,
+            modelId: config.modelId
+          });
+
           setErrorMessage("You've used your one free debate! Please enter your API key to continue.");
         } else {
           console.error("Debate Error:", err);
@@ -633,6 +651,7 @@ ${selectedPersonas.map(p => {
           serverProviders={serverProviders}
           isLoading={false}
           requireApiKey={freeDebateExhausted}
+          initialConfig={failedConfig}
         />
       )}
 
