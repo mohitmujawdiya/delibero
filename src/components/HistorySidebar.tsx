@@ -4,80 +4,88 @@ import { useState, useEffect } from "react";
 import { useDebateHistory, SavedDebate } from "@/hooks/useDebateHistory";
 
 interface HistorySidebarProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onSelectDebate: (debate: SavedDebate) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onSelectDebate: (debate: SavedDebate) => void;
 }
 
 export function HistorySidebar({ isOpen, onClose, onSelectDebate }: HistorySidebarProps) {
-    const { getHistory, deleteDebate } = useDebateHistory();
-    const [history, setHistory] = useState<SavedDebate[]>([]);
+  const { getHistory, deleteDebate } = useDebateHistory();
+  const [history, setHistory] = useState<SavedDebate[]>([]);
 
-    // Load history when sidebar opens
-    useEffect(() => {
-        if (isOpen) {
-            setHistory(getHistory());
-        }
-    }, [isOpen]);
+  const [mounted, setMounted] = useState(false);
 
-    const handleDelete = (id: string, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (confirm("Are you sure you want to delete this debate?")) {
-            const updated = deleteDebate(id);
-            setHistory(updated); // Update local state immediately
-        }
-    };
+  // Load history when sidebar opens
+  useEffect(() => {
+    setMounted(true);
+    if (isOpen) {
+      setHistory(getHistory());
+    }
+  }, [isOpen, getHistory]);
 
-    return (
-        <>
-            {/* Backdrop */}
-            {isOpen && <div className="history-backdrop" onClick={onClose} />}
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("Are you sure you want to delete this debate?")) {
+      const updated = deleteDebate(id);
+      setHistory(updated); // Update local state immediately
+    }
+  };
 
-            {/* Sidebar Panel */}
-            <div className={`history-sidebar ${isOpen ? "open" : ""}`}>
-                <div className="history-header">
-                    <h2>🕑 Debate History</h2>
-                    <button className="close-btn" onClick={onClose}>×</button>
-                </div>
+  // Prevent hydration mismatch and FOUC (Flash of Unstyled Content)
+  if (!mounted) {
+    return null;
+  }
 
-                <div className="history-list">
-                    {history.length === 0 ? (
-                        <div className="history-empty">
-                            <p>No past debates found.</p>
-                            <small>Calculations are saved automatically when they complete.</small>
-                        </div>
-                    ) : (
-                        history.map((item) => (
-                            <div
-                                key={item.id}
-                                className="history-item"
-                                onClick={() => onSelectDebate(item)}
-                            >
-                                <div className="history-item-header">
-                                    <span className="history-date">{item.date}</span>
-                                    <button
-                                        className="delete-btn"
-                                        onClick={(e) => handleDelete(item.id, e)}
-                                        title="Delete"
-                                    >
-                                        🗑️
-                                    </button>
-                                </div>
-                                <div className="history-question">
-                                    {item.question.slice(0, 80)}{item.question.length > 80 ? "..." : ""}
-                                </div>
-                                {item.synthesisSnippet && (
-                                    <div className="history-verdict">
-                                        <strong>Verdict:</strong> {item.synthesisSnippet.slice(0, 60)}...
-                                    </div>
-                                )}
-                            </div>
-                        ))
-                    )}
-                </div>
+  return (
+    <>
+      {/* Backdrop */}
+      {isOpen && <div className="history-backdrop" onClick={onClose} />}
+
+      {/* Sidebar Panel */}
+      <div className={`history-sidebar ${isOpen ? "open" : ""}`}>
+        <div className="history-header">
+          <h2>🕑 Debate History</h2>
+          <button className="close-btn" onClick={onClose}>×</button>
+        </div>
+
+        <div className="history-list">
+          {history.length === 0 ? (
+            <div className="history-empty">
+              <p>No past debates found.</p>
+              <small>Calculations are saved automatically when they complete.</small>
             </div>
+          ) : (
+            history.map((item) => (
+              <div
+                key={item.id}
+                className="history-item"
+                onClick={() => onSelectDebate(item)}
+              >
+                <div className="history-item-header">
+                  <span className="history-date">{item.date}</span>
+                  <button
+                    className="delete-btn"
+                    onClick={(e) => handleDelete(item.id, e)}
+                    title="Delete"
+                  >
+                    🗑️
+                  </button>
+                </div>
+                <div className="history-question">
+                  {item.question.slice(0, 80)}{item.question.length > 80 ? "..." : ""}
+                </div>
+                {item.synthesisSnippet && (
+                  <div className="history-verdict">
+                    <strong>Verdict:</strong> {item.synthesisSnippet.slice(0, 60)}...
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
 
-            <style jsx>{`
+      <style jsx>{`
         .history-backdrop {
           position: fixed;
           top: 0;
@@ -95,13 +103,15 @@ export function HistorySidebar({ isOpen, onClose, onSelectDebate }: HistorySideb
           right: -400px;
           bottom: 0;
           width: 400px;
-          background: #111;
-          border-left: 1px solid #333;
+          background: rgba(10, 10, 10, 0.85);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border-left: 1px solid rgba(255, 255, 255, 0.1);
           z-index: 999;
-          transition: right 0.3s ease;
+          transition: right 0.4s cubic-bezier(0.16, 1, 0.3, 1);
           display: flex;
           flex-direction: column;
-          box-shadow: -5px 0 25px rgba(0,0,0,0.5);
+          box-shadow: -10px 0 40px rgba(0,0,0,0.5);
         }
 
         .history-sidebar.open {
@@ -110,16 +120,18 @@ export function HistorySidebar({ isOpen, onClose, onSelectDebate }: HistorySideb
 
         .history-header {
           padding: 20px;
-          border-bottom: 1px solid #333;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1);
           display: flex;
           justify-content: space-between;
           align-items: center;
-          background: #0a0a0a;
+          background: transparent;
         }
 
         .history-header h2 {
           margin: 0;
-          font-size: 1.2rem;
+          font-size: 1.15rem;
+          font-weight: 600;
+          letter-spacing: -0.02em;
           color: #eee;
         }
 
@@ -149,19 +161,18 @@ export function HistorySidebar({ isOpen, onClose, onSelectDebate }: HistorySideb
         }
 
         .history-item {
-          background: #1a1a1a;
-          border: 1px solid #333;
-          border-radius: 8px;
-          padding: 12px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 6px;
+          padding: 14px;
           margin-bottom: 12px;
           cursor: pointer;
-          transition: all 0.2s;
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         .history-item:hover {
-          background: #252525;
-          border-color: #555;
-          transform: translateY(-2px);
+          background: rgba(255, 255, 255, 0.06);
+          border-color: rgba(255, 255, 255, 0.2);
         }
 
         .history-item-header {
@@ -203,6 +214,6 @@ export function HistorySidebar({ isOpen, onClose, onSelectDebate }: HistorySideb
           display: inline-block;
         }
       `}</style>
-        </>
-    );
+    </>
+  );
 }
